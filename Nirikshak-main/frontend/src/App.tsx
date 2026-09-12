@@ -5,6 +5,7 @@ import {
   infrastructureAssets,
   monitoredLocations,
   responseProfiles,
+  historicalIncidents,
   type Asset,
   type Incident,
   type MonitoredLocation,
@@ -32,6 +33,8 @@ import "./IncidentEnhancements.css";
 type View =
   | "command"
   | "incidents"
+  | "impact"
+  | "cascade"
   | "infrastructure"
   | "analysis"
   | "routing"
@@ -433,6 +436,21 @@ function App() {
             />
           )}
 
+          {view === "impact" && (
+            <ImpactDashboard
+              incident={selectedIncident}
+              onBack={() => navigate("incidents")}
+            />
+          )}
+
+          {view === "cascade" && (
+            <CascadingEffects
+              incident={selectedIncident}
+              onIncident={setSelectedIncident}
+              onBack={() => navigate("incidents")}
+            />
+          )}
+
           {view === "infrastructure" && (
             <Infrastructure
               selectedAsset={selectedAsset}
@@ -538,6 +556,14 @@ function PageHeader({
     incidents: [
       "Incidents",
       "Monitor, triage and coordinate active events",
+    ],
+    impact: [
+      "Infrastructure impact",
+      "Assess current and predicted effects of the selected incident",
+    ],
+    cascade: [
+      "Cascading impact",
+      "Trace how the selected incident propagates across dependencies",
     ],
     infrastructure: [
       "Infrastructure / digital twin",
@@ -1310,11 +1336,17 @@ function IncidentDrawer({
         </Panel>
 
         <div className="drawer-actions">
-          <button className="button button-secondary">
+          <button
+            className="button button-secondary"
+            onClick={() => onNavigate("impact")}
+          >
             View impact
           </button>
 
-          <button className="button button-secondary">
+          <button
+            className="button button-secondary"
+            onClick={() => onNavigate("cascade")}
+          >
             View cascading impact
           </button>
 
@@ -2084,14 +2116,89 @@ function ImpactList({
   );
 }
 
+function ImpactDashboard({
+  incident,
+  onBack,
+}: {
+  incident: Incident;
+  onBack: () => void;
+}) {
+  const riskValue = (asset: Asset) =>
+    infrastructureAssets.find((item) => item.id === asset.id)?.currentRisk ??
+    asset.currentRisk ??
+    incident.cascade.escalationProbability;
+  const riskAsset = incident.assets.reduce(
+    (highest, asset) => riskValue(asset) > riskValue(highest) ? asset : highest,
+    incident.assets[0]
+  );
+
+  return (
+    <div className="response-layout">
+      <div className="detail-banner">
+        <div>
+          <button className="text-button" onClick={onBack}>← Back to incident</button>
+          <span className="eyebrow">INFRASTRUCTURE IMPACT · {incident.id}</span>
+          <h2>{incident.title}</h2>
+          <p>{incident.type} · {incident.location} · {incident.status}</p>
+        </div>
+        <div className="response-heading-tags">
+          <SeverityTag severity={incident.severity} />
+          <StatusTag status={incident.status} />
+        </div>
+      </div>
+
+      <div className="detail-grid">
+        <Panel title="Current impact" eyebrow="OBSERVED NOW">
+          <p className="muted-copy">{incident.currentImpacts}</p>
+          <div className="mini-metrics">
+            <div><b>{incident.assets.length}</b><small>AFFECTED ASSETS</small></div>
+            <div><b>{incident.confidence}%</b><small>MODEL CONFIDENCE</small></div>
+            <div><b>{incident.severity}</b><small>SEVERITY</small></div>
+          </div>
+        </Panel>
+
+        <Panel title="Predicted impact" eyebrow="NEXT WINDOW">
+          <p className="muted-copy">{incident.predictedImpacts}</p>
+          <div className="mini-metrics">
+            <div><b>{incident.cascade.escalationProbability}%</b><small>ESCALATION RISK</small></div>
+            <div><b>{riskValue(riskAsset)}%</b><small>HIGHEST ASSET RISK</small></div>
+            <div><b>{incident.cascade.highestRiskAsset}</b><small>PRIORITY ASSET</small></div>
+          </div>
+        </Panel>
+
+        <Panel title="Affected infrastructure" eyebrow="INCIDENT-SPECIFIC ASSETS">
+          <div className="asset-rows">
+            {incident.assets.map((asset) => (
+              <div className="asset-row" key={asset.id}>
+                <span className="asset-large">◆</span>
+                <span><b>{asset.name}</b><small>{asset.type} · Risk {riskValue(asset)}% · {asset.detail}</small></span>
+                <SeverityTag severity={infrastructureAssets.find((item) => item.id === asset.id)?.criticality ?? asset.criticality ?? "MEDIUM"} />
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel title="Response impact" eyebrow="DEPARTMENTS AFFECTED">
+          <div className="drawer-list">
+            {incident.responsibleDepartments.map((department) => <span key={department}>{department}</span>)}
+          </div>
+          <p className="muted-copy">{incident.cascadeSummary}</p>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
 function CascadingEffects({
   incident,
   onIncident,
+  onBack,
 }: {
   incident: Incident;
   onIncident: (
     incident: Incident
   ) => void;
+  onBack: () => void;
 }) {
   const [selected, setSelected] =
     useState(
@@ -2156,6 +2263,7 @@ function CascadingEffects({
 
   return (
     <>
+      <button className="text-button" onClick={onBack}>← Back to incident</button>
       <div className="cascade-toolbar">
         <label>
           Incident
@@ -5003,64 +5111,54 @@ function ScenarioCard({
 }
 
 function History() {
-  const [query, setQuery] =
-    useState("");
+  const [query, setQuery] = useState("");
+  const [incidentId, setIncidentId] = useState("ALL");
+  const [type, setType] = useState("ALL");
+  const [severity, setSeverity] = useState("ALL");
+  const [date, setDate] = useState("ALL");
+  const [status, setStatus] = useState("ALL");
+  const [exportMessage, setExportMessage] = useState("");
 
-  const records = [
-    {
-      id: "INC-2398",
-      title:
-        "Warehouse smoke incident",
-      type: "FIRE",
-      date: "08 SEP 2026",
-      duration: "42 min",
-      outcome: "Resolved",
-    },
-    {
-      id: "INC-2387",
-      title:
-        "Flash flooding - Koramangala",
-      type: "FLOOD",
-      date: "04 SEP 2026",
-      duration: "3 hr 12 min",
-      outcome: "Resolved",
-    },
-    {
-      id: "INC-2372",
-      title:
-        "Power line failure",
-      type: "POWER",
-      date: "29 AUG 2026",
-      duration: "1 hr 08 min",
-      outcome: "Resolved",
-    },
-    {
-      id: "INC-2361",
-      title:
-        "Multi-vehicle collision",
-      type: "TRANSPORT",
-      date: "24 AUG 2026",
-      duration: "58 min",
-      outcome: "Closed",
-    },
-  ].filter(
-    (item) =>
-      item.title
-        .toLowerCase()
-        .includes(
-          query.toLowerCase()
-        ) ||
-      item.type
-        .toLowerCase()
-        .includes(
-          query.toLowerCase()
-        )
-  );
+  const normalizedQuery = query.trim().toLowerCase();
+  const records = historicalIncidents.filter((item) => {
+    const matchesQuery = !normalizedQuery || [item.id, item.title, item.type, item.location]
+      .some((value) => value.toLowerCase().includes(normalizedQuery));
+    return matchesQuery &&
+      (incidentId === "ALL" || item.id === incidentId) &&
+      (type === "ALL" || item.type === type) &&
+      (severity === "ALL" || item.severity === severity) &&
+      (date === "ALL" || item.date === date) &&
+      (status === "ALL" || item.status === status);
+  });
+
+  const resetFilters = () => {
+    setQuery("");
+    setIncidentId("ALL");
+    setType("ALL");
+    setSeverity("ALL");
+    setDate("ALL");
+    setStatus("ALL");
+    setExportMessage("");
+  };
+
+  const exportCsv = () => {
+    const headers = ["Reference", "Incident", "Type", "Location", "Date", "Duration", "Severity", "Status", "Outcome"];
+    const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const rows = records.map((item) => [item.id, item.title, item.type, item.location, item.date, item.duration, item.severity, item.status, item.outcome]);
+    const csv = [headers, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "nirikshak-incident-history.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    setExportMessage("CSV exported successfully.");
+  };
 
   return (
     <Panel
       title="Incident archive"
-      eyebrow="1,248 RECORDS"
+      eyebrow={`${historicalIncidents.length} RECORDS`}
     >
       <div className="history-toolbar">
         <label className="search-field">
@@ -5077,21 +5175,41 @@ function History() {
           />
         </label>
 
-        <select>
-          <option>
-            All incident types
-          </option>
-          <option>Fire</option>
-          <option>Flood</option>
-          <option>
-            Transport
-          </option>
+        <select value={incidentId} onChange={(event) => setIncidentId(event.target.value)}>
+          <option value="ALL">All incidents</option>
+          {historicalIncidents.map((item) => <option value={item.id} key={item.id}>{item.id} · {item.title}</option>)}
         </select>
 
-        <button className="button button-secondary">
+        <select value={type} onChange={(event) => setType(event.target.value)}>
+          <option value="ALL">All incident types</option>
+          {[...new Set(historicalIncidents.map((item) => item.type))].map((item) => <option value={item} key={item}>{item}</option>)}
+        </select>
+
+        <select value={severity} onChange={(event) => setSeverity(event.target.value)}>
+          <option value="ALL">All severities</option>
+          {[...new Set(historicalIncidents.map((item) => item.severity))].map((item) => <option value={item} key={item}>{item}</option>)}
+        </select>
+
+        <select value={date} onChange={(event) => setDate(event.target.value)}>
+          <option value="ALL">All dates</option>
+          {[...new Set(historicalIncidents.map((item) => item.date))].map((item) => <option value={item} key={item}>{item}</option>)}
+        </select>
+
+        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="ALL">All statuses</option>
+          {[...new Set(historicalIncidents.map((item) => item.status))].map((item) => <option value={item} key={item}>{item}</option>)}
+        </select>
+
+        <button className="button button-secondary" onClick={resetFilters}>
+          Clear filters
+        </button>
+
+        <button className="button button-secondary" onClick={exportCsv}>
           Export CSV ↓
         </button>
       </div>
+
+      <div className="history-result-count">Showing {records.length} of {historicalIncidents.length} incidents{exportMessage && <span>{exportMessage}</span>}</div>
 
       <div className="table-wrap">
         <table>
@@ -5100,6 +5218,7 @@ function History() {
               <th>Reference</th>
               <th>Incident</th>
               <th>Type</th>
+              <th>Location</th>
               <th>Date</th>
               <th>Duration</th>
               <th>Outcome</th>
@@ -5123,6 +5242,10 @@ function History() {
                   </td>
 
                   <td>
+                    {item.location}
+                  </td>
+
+                  <td>
                     {item.date}
                   </td>
 
@@ -5133,7 +5256,7 @@ function History() {
                   <td>
                     <StatusTag
                       status={
-                        item.outcome
+                        item.status
                       }
                     />
                   </td>
@@ -5143,6 +5266,7 @@ function History() {
           </tbody>
         </table>
       </div>
+      {!records.length && <p className="muted-copy">No incidents match the selected filters.</p>}
     </Panel>
   );
 }

@@ -79,6 +79,18 @@ export type Incident = {
   };
 };
 
+export type HistoricalIncident = {
+  id: string;
+  title: string;
+  type: string;
+  location: string;
+  date: string;
+  duration: string;
+  outcome: string;
+  severity: Severity;
+  status: string;
+};
+
 const node = (name: string, type: string, detail: string, risk: number, onset: string): CascadeNode => ({ name, type, detail, risk, onset });
 const asset = (id: string, name: string, type: string, status: string, detail: string, x: number, y: number): Asset => ({ id, name, type, status, detail, x, y });
 
@@ -158,4 +170,11 @@ export const incidents: Incident[] = [
     assets: [asset("M7", "Water Main M7", "WATER", "AT RISK", "Pressure sensor reports 42% below normal at the Domlur branch.", 75, 65), asset("W2", "Water Pump W2", "WATER", "MONITORING", "Pump is compensating for pressure loss on the eastern zone.", 61, 48), asset("DC1", "Domlur Clinic", "HOSPITAL", "SAFE", "Clinic has a six-hour stored water reserve.", 29, 36)],
     cascade: { primaryEvent: "Water main pressure drop", escalationProbability: 38, highestRiskAsset: "Water Main M7", branches: [{ label: "WATER SERVICE", nodes: [node("Pressure drop", "ORIGIN", "Main M7 pressure is 42% below normal.", 91, "Now"), node("Pump compensation", "WATER", "W2 increases output to stabilise the eastern zone.", 52, "+10 min"), node("Low water service", "EFFECT", "Upper floors may experience reduced supply.", 38, "+30 min"), node("Hydrant pressure risk", "RISK", "Fire hydrants may not meet response requirements.", 31, "+45 min")] }, { label: "PUBLIC READINESS", nodes: [node("Pressure drop", "ORIGIN", "A valve or joint fault is suspected on M7.", 91, "Now"), node("Tanker deployment", "CIVIC", "A temporary tanker point may be needed at Domlur.", 44, "+25 min"), node("Clinic reserve drawdown", "MEDICAL", "Domlur Clinic reserve covers current demand.", 22, "+45 min")] }] }
   }
+];
+
+export const historicalIncidents: HistoricalIncident[] = [
+  { id: "INC-2398", title: "Warehouse smoke incident", type: "FIRE", location: "Whitefield Industrial Area", date: "08 SEP 2026", duration: "42 min", outcome: "Resolved", severity: "HIGH", status: "RESOLVED" },
+  { id: "INC-2387", title: "Flash flooding - Koramangala", type: "FLOOD", location: "Koramangala 5th Block", date: "04 SEP 2026", duration: "3 hr 12 min", outcome: "Resolved", severity: "HIGH", status: "RESOLVED" },
+  { id: "INC-2372", title: "Power line failure", type: "POWER", location: "East Bengaluru Grid", date: "29 AUG 2026", duration: "1 hr 08 min", outcome: "Resolved", severity: "MEDIUM", status: "RESOLVED" },
+  { id: "INC-2361", title: "Multi-vehicle collision", type: "TRANSPORT", location: "Outer Ring Road", date: "24 AUG 2026", duration: "58 min", outcome: "Closed", severity: "HIGH", status: "CLOSED" },
 ];
