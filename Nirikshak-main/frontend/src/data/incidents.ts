@@ -67,6 +67,14 @@ export type Incident = {
   affectedInfrastructure: string[];
   currentImpacts: string;
   predictedImpacts: string;
+  impactDetails?: {
+    assetName: string;
+    impactState: "current" | "predicted";
+    impactType: string;
+    severity: string | null;
+    likelihood: number | null;
+    description: string;
+  }[];
   cascadeSummary: string;
   recommendedActions: { text: string; meta: string }[];
   responsibleDepartments: string[];

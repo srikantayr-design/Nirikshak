@@ -27,6 +27,10 @@ import {
   savePreferences,
   type Preferences,
 } from "./preferences";
+import {
+  getIncidentByExternalId,
+  getIncidents,
+} from "./services/incidentService";
 import "./App.css";
 import "./IncidentEnhancements.css";
 
@@ -152,6 +156,9 @@ const navGroups = [
 function App() {
   const [view, setView] = useState<View>("command");
   const [selectedIncident, setSelectedIncident] = useState(incidents[0]);
+  const [databaseIncidents, setDatabaseIncidents] = useState<Incident[]>([]);
+  const [incidentLoading, setIncidentLoading] = useState(true);
+  const [incidentError, setIncidentError] = useState(false);
   const [selectedAsset, setSelectedAsset] =
     useState<Asset | null>(null);
   const [selectedLocation, setSelectedLocation] =
@@ -170,6 +177,27 @@ function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [preferences, setPreferences] =
     useState<Preferences>(loadPreferences);
+
+  useEffect(() => {
+    let active = true;
+
+    void getIncidents()
+      .then((loadedIncidents) => {
+        if (!active) return;
+        setDatabaseIncidents(loadedIncidents);
+        if (loadedIncidents[0]) setSelectedIncident(loadedIncidents[0]);
+      })
+      .catch(() => {
+        if (active) setIncidentError(true);
+      })
+      .finally(() => {
+        if (active) setIncidentLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const sync = (event: Event) =>
@@ -433,6 +461,9 @@ function App() {
               onNavigate={navigate}
               onIncident={setSelectedIncident}
               selectedIncident={selectedIncident}
+              incidents={databaseIncidents}
+              loading={incidentLoading}
+              error={incidentError}
             />
           )}
 
@@ -1093,30 +1124,48 @@ function Incidents({
   onNavigate,
   onIncident,
   selectedIncident,
+  incidents: databaseIncidents,
+  loading,
+  error,
 }: {
   onNavigate: (view: View) => void;
   onIncident: (incident: Incident) => void;
   selectedIncident: Incident;
+  incidents: Incident[];
+  loading: boolean;
+  error: boolean;
 }) {
   const [filter, setFilter] =
     useState("ALL");
 
   const [drawerOpen, setDrawerOpen] =
     useState(false);
+  const [profileLoading, setProfileLoading] =
+    useState(false);
+  const [profileError, setProfileError] =
+    useState(false);
 
   const shown =
     filter === "ALL"
-      ? incidents
-      : incidents.filter(
+      ? databaseIncidents
+      : databaseIncidents.filter(
           (item) =>
             item.severity === filter
         );
 
-  const selectIncident = (
-    incident: Incident
-  ) => {
-    onIncident(incident);
+  const selectIncident = async (incident: Incident) => {
+    setProfileLoading(true);
+    setProfileError(false);
     setDrawerOpen(true);
+
+    try {
+      const selected = await getIncidentByExternalId(incident.id);
+      onIncident(selected);
+    } catch {
+      setProfileError(true);
+    } finally {
+      setProfileLoading(false);
+    }
   };
 
   return (
@@ -1149,7 +1198,19 @@ function Incidents({
           </div>
         }
       >
-        <div className="table-wrap">
+        {loading && (
+          <p className="muted-copy">Loading incidents...</p>
+        )}
+
+        {error && (
+          <p className="muted-copy">Unable to load incidents.</p>
+        )}
+
+        {!loading && !error && !shown.length && (
+          <p className="muted-copy">No incidents found.</p>
+        )}
+
+        {!loading && !error && shown.length > 0 && <div className="table-wrap">
           <table>
             <thead>
               <tr>
@@ -1227,12 +1288,14 @@ function Incidents({
               )}
             </tbody>
           </table>
-        </div>
+        </div>}
       </Panel>
 
       {drawerOpen && (
         <IncidentDrawer
           incident={selectedIncident}
+          loading={profileLoading}
+          error={profileError}
           onClose={() =>
             setDrawerOpen(false)
           }
@@ -1245,13 +1308,34 @@ function Incidents({
 
 function IncidentDrawer({
   incident,
+  loading,
+  error,
   onClose,
   onNavigate,
 }: {
   incident: Incident;
+  loading: boolean;
+  error: boolean;
   onClose: () => void;
   onNavigate: (view: View) => void;
 }) {
+  if (loading || error) {
+    return (
+      <aside className="incident-drawer" aria-label="Incident details">
+        <div className="drawer-header">
+          <div>
+            <span className="eyebrow">{incident.id} · INCIDENT PROFILE</span>
+            <h2>{incident.title}</h2>
+          </div>
+          <button className="drawer-close" onClick={onClose} aria-label="Close incident details">
+            ×
+          </button>
+        </div>
+        <p className="muted-copy">{loading ? "Loading incidents..." : "Unable to load incidents."}</p>
+      </aside>
+    );
+  }
+
   return (
     <aside
       className="incident-drawer"
@@ -1372,6 +1456,20 @@ function IncidentDrawer({
                 </span>
               )
             )}
+          </div>
+        </Panel>
+
+        <Panel
+          title="Impact register"
+          eyebrow="DATABASE IMPACTS"
+        >
+          <div className="drawer-list">
+            {(incident.impactDetails ?? []).map((impact) => (
+              <span key={`${impact.assetName}-${impact.impactState}`}>
+                {impact.assetName} · {impact.impactState} · {impact.impactType}
+                {impact.likelihood === null ? "" : ` · ${impact.likelihood}% likelihood`}
+              </span>
+            ))}
           </div>
         </Panel>
 
