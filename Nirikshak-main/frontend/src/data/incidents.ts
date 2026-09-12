@@ -56,6 +56,7 @@ export type CascadeBranch = { label: string; nodes: CascadeNode[] };
 
 export type Incident = {
   id: string;
+  databaseId?: string;
   title: string;
   type: string;
   severity: Severity;

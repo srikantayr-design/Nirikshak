@@ -31,6 +31,11 @@ import {
   getIncidentByExternalId,
   getIncidents,
 } from "./services/incidentService";
+import {
+  getInfrastructureAssets,
+  infrastructureAssetToFrontendAsset,
+} from "./services/infrastructureService";
+import { getIncidentImpactDetails, type IncidentImpactDetail } from "./services/impactService";
 import "./App.css";
 import "./IncidentEnhancements.css";
 
@@ -122,6 +127,14 @@ function persistCoordinationRequests(
 
 const commandAssets = infrastructureAssets;
 
+function enrichIncidentAssets(incident: Incident, assets: Asset[]): Incident {
+  const assetById = new Map(assets.map((asset) => [asset.id, asset]));
+  return {
+    ...incident,
+    assets: incident.assets.map((asset) => assetById.get(asset.id) ?? asset),
+  };
+}
+
 const navGroups = [
   {
     label: "OPERATIONS",
@@ -159,6 +172,9 @@ function App() {
   const [databaseIncidents, setDatabaseIncidents] = useState<Incident[]>([]);
   const [incidentLoading, setIncidentLoading] = useState(true);
   const [incidentError, setIncidentError] = useState(false);
+  const [databaseAssets, setDatabaseAssets] = useState<Asset[]>([]);
+  const [infrastructureLoading, setInfrastructureLoading] = useState(true);
+  const [infrastructureError, setInfrastructureError] = useState(false);
   const [selectedAsset, setSelectedAsset] =
     useState<Asset | null>(null);
   const [selectedLocation, setSelectedLocation] =
@@ -198,6 +214,33 @@ function App() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    void getInfrastructureAssets()
+      .then((records) => {
+        if (!active) return;
+        const assets = records.map(infrastructureAssetToFrontendAsset);
+        setDatabaseAssets(assets);
+        setDatabaseIncidents((current) => current.map((incident) => enrichIncidentAssets(incident, assets)));
+        setSelectedIncident((current) => enrichIncidentAssets(current, assets));
+      })
+      .catch(() => {
+        if (active) setInfrastructureError(true);
+      })
+      .finally(() => {
+        if (active) setInfrastructureLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selectDatabaseIncident = (incident: Incident) => {
+    setSelectedIncident(enrichIncidentAssets(incident, databaseAssets));
+  };
 
   useEffect(() => {
     const sync = (event: Event) =>
@@ -451,15 +494,19 @@ function App() {
           {view === "command" && (
             <CommandCenter
               onNavigate={navigate}
-              onIncident={setSelectedIncident}
+              onIncident={selectDatabaseIncident}
               onAsset={setSelectedAsset}
+              incidents={databaseIncidents}
+              assets={databaseAssets}
+              infrastructureLoading={infrastructureLoading}
+              infrastructureError={infrastructureError}
             />
           )}
 
           {view === "incidents" && (
             <Incidents
               onNavigate={navigate}
-              onIncident={setSelectedIncident}
+              onIncident={selectDatabaseIncident}
               selectedIncident={selectedIncident}
               incidents={databaseIncidents}
               loading={incidentLoading}
@@ -470,6 +517,7 @@ function App() {
           {view === "impact" && (
             <ImpactDashboard
               incident={selectedIncident}
+              assets={databaseAssets}
               onBack={() => navigate("incidents")}
             />
           )}
@@ -488,6 +536,9 @@ function App() {
               onAsset={setSelectedAsset}
               selectedLocation={selectedLocation}
               onLocation={setSelectedLocation}
+              assets={databaseAssets}
+              loading={infrastructureLoading}
+              error={infrastructureError}
               onAnalysis={() =>
                 navigate("analysis")
               }
@@ -498,6 +549,9 @@ function App() {
             <AnalysisReport
               selectedLocation={selectedLocation}
               onLocation={setSelectedLocation}
+              assets={databaseAssets}
+              loading={infrastructureLoading}
+              error={infrastructureError}
             />
           )}
 
@@ -884,24 +938,36 @@ function CommandCenter({
   onNavigate,
   onIncident,
   onAsset,
+  incidents: databaseIncidents,
+  assets,
+  infrastructureLoading,
+  infrastructureError,
 }: {
   onNavigate: (view: View) => void;
   onIncident: (incident: Incident) => void;
   onAsset: (asset: Asset) => void;
+  incidents: Incident[];
+  assets: Asset[];
+  infrastructureLoading: boolean;
+  infrastructureError: boolean;
 }) {
   const activeIncident =
-    incidents.find(
+    databaseIncidents.find(
       (incident) =>
         incident.severity === "CRITICAL" &&
         incident.status === "ACTIVE"
-    ) ?? incidents[0];
+    ) ?? databaseIncidents[0];
+
+  const affectedAssetCount = activeIncident
+    ? new Set(activeIncident.affectedInfrastructure).size
+    : 0;
 
   return (
     <>
       <div className="stats-grid">
         <StatCard
           label="Active incidents"
-          value="04"
+          value={databaseIncidents.length.toString().padStart(2, "0")}
           detail="+1 in last 30 min"
           tone="red"
           icon="!"
@@ -909,7 +975,7 @@ function CommandCenter({
 
         <StatCard
           label="Critical incidents"
-          value="01"
+          value={databaseIncidents.filter((incident) => incident.severity === "CRITICAL").length.toString().padStart(2, "0")}
           detail="Requires immediate action"
           tone="orange"
           icon="◆"
@@ -917,7 +983,7 @@ function CommandCenter({
 
         <StatCard
           label="Assets at risk"
-          value="12"
+          value={affectedAssetCount.toString().padStart(2, "0")}
           detail="Across 4 infrastructure types"
           tone="yellow"
           icon="◇"
@@ -950,11 +1016,10 @@ function CommandCenter({
             </button>
           }
         >
-          <CommandCenterMap
-            incident={activeIncident}
-            assets={infrastructureAssets}
-            onAsset={onAsset}
-          />
+          {infrastructureLoading && <p className="muted-copy">Loading infrastructure...</p>}
+          {infrastructureError && <p className="muted-copy">Unable to load infrastructure data.</p>}
+          {!infrastructureLoading && !infrastructureError && !activeIncident && <p className="muted-copy">No infrastructure data available.</p>}
+          {!infrastructureLoading && !infrastructureError && activeIncident && <CommandCenterMap incident={activeIncident} assets={assets} onAsset={onAsset} />}
         </Panel>
 
         <div className="command-side">
@@ -973,7 +1038,7 @@ function CommandCenter({
             }
           >
             <div className="incident-list">
-              {incidents
+              {databaseIncidents
                 .slice(0, 3)
                 .map((incident) => (
                   <button
@@ -1588,6 +1653,9 @@ function Infrastructure({
   selectedLocation,
   onLocation,
   onAnalysis,
+  assets,
+  loading,
+  error,
 }: {
   selectedAsset: Asset | null;
   onAsset: (
@@ -1600,6 +1668,9 @@ function Infrastructure({
     location: MonitoredLocation
   ) => void;
   onAnalysis: () => void;
+  assets: Asset[];
+  loading: boolean;
+  error: boolean;
 }) {
   const [layers, setLayers] =
     useState<Record<string, boolean>>({
@@ -1636,17 +1707,18 @@ function Infrastructure({
         eyebrow="DIGITAL TWIN · OPENSTREETMAP"
         className="twin-map-panel"
       >
-        <DigitalTwinMap
-          assets={infrastructureAssets}
+        {loading && <p className="muted-copy">Loading infrastructure...</p>}
+        {error && <p className="muted-copy">Unable to load infrastructure data.</p>}
+        {!loading && !error && !assets.length && <p className="muted-copy">No infrastructure data available.</p>}
+        {!loading && !error && assets.length > 0 && <DigitalTwinMap
+          assets={assets}
           locations={monitoredLocations}
           layers={layers}
           selectedAsset={selectedAsset}
-          selectedLocation={
-            selectedLocation
-          }
+          selectedLocation={selectedLocation}
           onAsset={onAsset}
           onLocation={onLocation}
-        />
+        />}
 
         <div className="layer-strip">
           {layerOptions.map(
@@ -1880,6 +1952,9 @@ function LocationInspector({
 function AnalysisReport({
   selectedLocation,
   onLocation,
+  assets,
+  loading,
+  error,
 }: {
   selectedLocation:
     | MonitoredLocation
@@ -1887,6 +1962,9 @@ function AnalysisReport({
   onLocation: (
     location: MonitoredLocation
   ) => void;
+  assets: Asset[];
+  loading: boolean;
+  error: boolean;
 }) {
   const [scenarioType, setScenarioType] =
     useState("FIRE");
@@ -1903,7 +1981,7 @@ function AnalysisReport({
   const nearbyAssets =
     location.nearbyAssetIds
       .map((id) =>
-        infrastructureAssets.find(
+        assets.find(
           (asset) => asset.id === id
         )
       )
@@ -1914,6 +1992,9 @@ function AnalysisReport({
 
   return (
     <div className="analysis-layout">
+      {loading && <p className="muted-copy">Loading infrastructure...</p>}
+      {error && <p className="muted-copy">Unable to load infrastructure data.</p>}
+      {!loading && !error && !assets.length && <p className="muted-copy">No infrastructure data available.</p>}
       <Panel
         title="Monitored locations"
         eyebrow="PREVENTIVE RISK REGISTER"
@@ -2216,18 +2297,54 @@ function ImpactList({
 
 function ImpactDashboard({
   incident,
+  assets,
   onBack,
 }: {
   incident: Incident;
+  assets: Asset[];
   onBack: () => void;
 }) {
+  const [impactDetails, setImpactDetails] = useState<IncidentImpactDetail[]>([]);
+  const [impactLoading, setImpactLoading] = useState(true);
+  const [impactError, setImpactError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!incident.databaseId) {
+      setImpactLoading(false);
+      setImpactError(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    setImpactLoading(true);
+    setImpactError(false);
+    void getIncidentImpactDetails(incident.databaseId)
+      .then((details) => {
+        if (active) setImpactDetails(details);
+      })
+      .catch(() => {
+        if (active) setImpactError(true);
+      })
+      .finally(() => {
+        if (active) setImpactLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [incident.databaseId]);
+
+  const impactAssets = impactDetails
+    .map((impact) => assets.find((asset) => asset.id === impact.asset?.external_id))
+    .filter((asset): asset is Asset => Boolean(asset));
   const riskValue = (asset: Asset) =>
-    infrastructureAssets.find((item) => item.id === asset.id)?.currentRisk ??
     asset.currentRisk ??
     incident.cascade.escalationProbability;
-  const riskAsset = incident.assets.reduce(
+  const riskAsset = impactAssets.reduce(
     (highest, asset) => riskValue(asset) > riskValue(highest) ? asset : highest,
-    incident.assets[0]
+    impactAssets[0]
   );
 
   return (
@@ -2245,11 +2362,15 @@ function ImpactDashboard({
         </div>
       </div>
 
+      {impactLoading && <p className="muted-copy">Loading infrastructure...</p>}
+      {impactError && <p className="muted-copy">Unable to load infrastructure data.</p>}
+      {!impactLoading && !impactError && !impactDetails.length && <p className="muted-copy">No infrastructure data available.</p>}
+
       <div className="detail-grid">
         <Panel title="Current impact" eyebrow="OBSERVED NOW">
           <p className="muted-copy">{incident.currentImpacts}</p>
           <div className="mini-metrics">
-            <div><b>{incident.assets.length}</b><small>AFFECTED ASSETS</small></div>
+            <div><b>{impactDetails.length}</b><small>AFFECTED IMPACTS</small></div>
             <div><b>{incident.confidence}%</b><small>MODEL CONFIDENCE</small></div>
             <div><b>{incident.severity}</b><small>SEVERITY</small></div>
           </div>
@@ -2259,20 +2380,22 @@ function ImpactDashboard({
           <p className="muted-copy">{incident.predictedImpacts}</p>
           <div className="mini-metrics">
             <div><b>{incident.cascade.escalationProbability}%</b><small>ESCALATION RISK</small></div>
-            <div><b>{riskValue(riskAsset)}%</b><small>HIGHEST ASSET RISK</small></div>
-            <div><b>{incident.cascade.highestRiskAsset}</b><small>PRIORITY ASSET</small></div>
+            <div><b>{riskAsset ? `${riskValue(riskAsset)}%` : "—"}</b><small>HIGHEST ASSET RISK</small></div>
+            <div><b>{riskAsset?.name ?? "—"}</b><small>PRIORITY ASSET</small></div>
           </div>
         </Panel>
 
         <Panel title="Affected infrastructure" eyebrow="INCIDENT-SPECIFIC ASSETS">
           <div className="asset-rows">
-            {incident.assets.map((asset) => (
-              <div className="asset-row" key={asset.id}>
+            {impactDetails.map((impact) => {
+              const asset = assets.find((item) => item.id === impact.asset?.external_id);
+              if (!asset) return null;
+              return <div className="asset-row" key={impact.id}>
                 <span className="asset-large">◆</span>
-                <span><b>{asset.name}</b><small>{asset.type} · Risk {riskValue(asset)}% · {asset.detail}</small></span>
-                <SeverityTag severity={infrastructureAssets.find((item) => item.id === asset.id)?.criticality ?? asset.criticality ?? "MEDIUM"} />
-              </div>
-            ))}
+                <span><b>{asset.name}</b><small>{asset.type} · {impact.impact_state} · {impact.impact_type} · Risk {riskValue(asset)}% · {impact.description ?? asset.detail}</small></span>
+                <SeverityTag severity={impact.severity?.toUpperCase() as Severity ?? asset.criticality ?? "MEDIUM"} />
+              </div>;
+            })}
           </div>
         </Panel>
 

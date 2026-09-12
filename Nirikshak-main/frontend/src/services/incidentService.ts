@@ -97,6 +97,7 @@ function mapIncident(row: IncidentRow): FrontendIncident {
 
   return {
     id: row.external_id,
+    databaseId: row.id,
     title: row.title,
     type: row.incident_type.toUpperCase().replaceAll("_", " "),
     severity: toSeverity(row.severity),
