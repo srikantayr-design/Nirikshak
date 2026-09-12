@@ -1,0 +1,594 @@
+.live-map {
+  position: absolute;
+
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  overflow: hidden;
+
+  background: #dce1e2;
+
+  isolation: isolate;
+}
+
+/* =========================================================
+   MAP
+   ========================================================= */
+
+.map-container {
+  position: absolute;
+
+  inset: -1.5%;
+
+  width: 103%;
+  height: 103%;
+
+  z-index: 0;
+
+  animation:
+    mapScaleIn 3.8s
+    cubic-bezier(0.22, 1, 0.36, 1)
+    forwards;
+}
+
+/* =========================================================
+   INITIAL REVEAL
+   ========================================================= */
+
+.map-reveal {
+  position: absolute;
+
+  inset: 0;
+
+  z-index: 8;
+
+  pointer-events: none;
+
+  background:
+    rgba(239, 242, 242, 0.95);
+
+  animation:
+    revealFade 2.8s
+    cubic-bezier(0.65, 0, 0.35, 1)
+    forwards;
+}
+
+/* =========================================================
+   DARK ATMOSPHERE
+   ========================================================= */
+
+.map-dark-overlay {
+  position: absolute;
+
+  inset: 0;
+
+  z-index: 2;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(6, 17, 22, 0.34) 0%,
+      rgba(6, 17, 22, 0.12) 38%,
+      rgba(6, 17, 22, 0.02) 62%,
+      rgba(6, 17, 22, 0.13) 100%
+    );
+}
+
+/* =========================================================
+   RIGHT-SIDE CLOUD SYSTEM
+   ========================================================= */
+
+.cloud-layer {
+  position: absolute;
+
+  top: -8%;
+
+  right: -3%;
+
+  width: 45%;
+
+  height: 116%;
+
+  z-index: 4;
+
+  pointer-events: none;
+
+  overflow: hidden;
+
+  opacity: 0;
+
+  animation:
+    cloudsAppear 2.8s
+    0.7s
+    cubic-bezier(0.22, 1, 0.36, 1)
+    forwards;
+}
+
+/* Individual cloud masses */
+
+.cloud {
+  position: absolute;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgba(255, 255, 255, 0.94) 0%,
+      rgba(255, 255, 255, 0.78) 27%,
+      rgba(255, 255, 255, 0.48) 48%,
+      rgba(255, 255, 255, 0.16) 67%,
+      rgba(255, 255, 255, 0) 80%
+    );
+
+  filter: blur(16px);
+
+  will-change: transform;
+}
+
+/* Main large cloud */
+
+.cloud-one {
+  width: 650px;
+
+  height: 430px;
+
+  top: -30px;
+
+  right: -250px;
+
+  animation:
+    cloudFloatOne 18s
+    ease-in-out
+    infinite;
+}
+
+/* Second cloud */
+
+.cloud-two {
+  width: 520px;
+
+  height: 360px;
+
+  top: 190px;
+
+  right: -190px;
+
+  opacity: 0.86;
+
+  animation:
+    cloudFloatTwo 23s
+    ease-in-out
+    infinite;
+}
+
+/* Middle cloud */
+
+.cloud-three {
+  width: 590px;
+
+  height: 390px;
+
+  top: 390px;
+
+  right: -300px;
+
+  opacity: 0.72;
+
+  animation:
+    cloudFloatThree 20s
+    ease-in-out
+    infinite;
+}
+
+/* Lower cloud */
+
+.cloud-four {
+  width: 520px;
+
+  height: 410px;
+
+  bottom: 80px;
+
+  right: -210px;
+
+  opacity: 0.6;
+
+  animation:
+    cloudFloatTwo 25s
+    ease-in-out
+    infinite reverse;
+}
+
+/* Small soft fog */
+
+.cloud-five {
+  width: 450px;
+
+  height: 300px;
+
+  top: 58%;
+
+  right: -100px;
+
+  opacity: 0.44;
+
+  filter: blur(24px);
+
+  animation:
+    cloudFloatOne 27s
+    ease-in-out
+    infinite reverse;
+}
+
+/* =========================================================
+   MONITORING BADGE
+   ========================================================= */
+
+.monitoring-badge {
+  position: absolute;
+
+  top: 27px;
+
+  right: 30px;
+
+  z-index: 12;
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  padding: 9px 13px;
+
+  border:
+
+    1px solid
+    rgba(255, 255, 255, 0.2);
+
+  border-radius: 999px;
+
+  background:
+    rgba(11, 22, 27, 0.38);
+
+  backdrop-filter: blur(14px);
+
+  -webkit-backdrop-filter: blur(14px);
+
+  color:
+    rgba(255, 255, 255, 0.78);
+
+  font-size: 9px;
+
+  font-weight: 650;
+
+  letter-spacing: 1.05px;
+
+  opacity: 0;
+
+  animation:
+    interfaceAppear 1.4s
+    1.8s
+    ease
+    forwards;
+}
+
+.monitoring-dot {
+  width: 7px;
+
+  height: 7px;
+
+  border-radius: 50%;
+
+  background: #64e894;
+
+  box-shadow:
+    0 0 0 3px
+      rgba(100, 232, 148, 0.08),
+    0 0 12px
+      rgba(100, 232, 148, 0.8);
+
+  animation:
+    monitoringPulse 1.8s
+    ease-in-out
+    infinite;
+}
+
+/* =========================================================
+   SYSTEM IDENTITY
+   ========================================================= */
+
+.system-identity {
+  position: absolute;
+
+  top: 30px;
+
+  left: 32px;
+
+  z-index: 12;
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 11px;
+
+  opacity: 0;
+
+  animation:
+    interfaceAppear 1.5s
+    1.4s
+    ease
+    forwards;
+}
+
+.identity-symbol {
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 34px;
+  height: 34px;
+
+  border-radius: 10px;
+
+  background:
+    rgba(255, 255, 255, 0.16);
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.25);
+
+  backdrop-filter: blur(12px);
+
+  -webkit-backdrop-filter: blur(12px);
+
+  color:
+    rgba(255, 255, 255, 0.93);
+
+  font-size: 19px;
+
+  font-weight: 300;
+
+  box-shadow:
+    0 8px 24px
+    rgba(0, 0, 0, 0.12);
+}
+
+.identity-title {
+  color: white;
+
+  font-size: 22px;
+
+  font-weight: 720;
+
+  letter-spacing: -0.4px;
+
+  line-height: 1;
+}
+
+.identity-subtitle {
+  margin-top: 4px;
+
+  color:
+    rgba(255, 255, 255, 0.64);
+
+  font-size: 7px;
+
+  font-weight: 550;
+
+  letter-spacing: 1px;
+}
+
+.identity-subtitle span {
+  opacity: 0.6;
+}
+
+/* =========================================================
+   BOTTOM INFORMATION
+   ========================================================= */
+
+.map-information {
+  position: absolute;
+
+  left: 31px;
+
+  bottom: 28px;
+
+  z-index: 12;
+
+  opacity: 0;
+
+  animation:
+    interfaceAppear 1.5s
+    2s
+    ease
+    forwards;
+}
+
+.map-information-title {
+  color:
+    rgba(255, 255, 255, 0.67);
+
+  font-size: 8px;
+
+  font-weight: 650;
+
+  letter-spacing: 1.4px;
+}
+
+.map-information-subtitle {
+  margin-top: 4px;
+
+  color:
+    rgba(255, 255, 255, 0.38);
+
+  font-size: 7px;
+
+  letter-spacing: 1px;
+}
+
+/* =========================================================
+   VIGNETTE
+   ========================================================= */
+
+.map-vignette {
+  position: absolute;
+
+  inset: 0;
+
+  z-index: 10;
+
+  pointer-events: none;
+
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgba(0, 0, 0, 0) 38%,
+      rgba(0, 0, 0, 0.07) 68%,
+      rgba(0, 0, 0, 0.26) 100%
+    );
+}
+
+/* =========================================================
+   ANIMATIONS
+   ========================================================= */
+
+@keyframes revealFade {
+  0% {
+    opacity: 1;
+  }
+
+  65% {
+    opacity: 0.74;
+  }
+
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@keyframes mapScaleIn {
+  0% {
+    transform: scale(1.035);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes cloudsAppear {
+  0% {
+    opacity: 0;
+    transform: translateX(65px);
+  }
+
+  100% {
+    opacity: 0.92;
+    transform: translateX(0);
+  }
+}
+
+@keyframes interfaceAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes monitoringPulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.28);
+    opacity: 0.55;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes cloudFloatOne {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(-22px, 12px, 0);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes cloudFloatTwo {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(18px, -16px, 0);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes cloudFloatThree {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(-16px, 20px, 0);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 800px) {
+  .system-identity {
+    top: 20px;
+    left: 20px;
+  }
+
+  .monitoring-badge {
+    top: 20px;
+    right: 20px;
+  }
+
+  .map-information {
+    left: 20px;
+    bottom: 20px;
+  }
+
+  .cloud-layer {
+    width: 60%;
+  }
+}
