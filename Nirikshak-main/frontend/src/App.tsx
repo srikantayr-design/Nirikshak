@@ -16,6 +16,7 @@ import DigitalTwinMap from "./components/DigitalTwinMap";
 import CommandCenterMap from "./components/CommandCenterMap";
 import EmergencyRouting from "./components/EmergencyRouting";
 import BackendAnalysisPanel from "./components/BackendAnalysisPanel";
+import ScenarioSimulationPanel from "./components/ScenarioSimulationPanel";
 import { MAP_CONFIG } from "./config";
 import {
   fetchDrivingRoutes,
@@ -1486,6 +1487,8 @@ function IncidentDrawer({
         </Panel>
 
         <BackendAnalysisPanel incident={incident} />
+
+        <ScenarioSimulationPanel incident={incident} />
 
         <div className="drawer-actions">
           <button
