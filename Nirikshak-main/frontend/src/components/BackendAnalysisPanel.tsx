@@ -42,11 +42,9 @@ export default function BackendAnalysisPanel({ incident }: Props) {
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(incident.id === "INC-2406");
+    setLoading(true);
     setError(null);
     setAnalysis(null);
-
-    if (incident.id !== "INC-2406") return () => controller.abort();
 
     void loadBackendIncidentAnalysis(incident.id, controller.signal)
       .then(setAnalysis)
@@ -59,8 +57,6 @@ export default function BackendAnalysisPanel({ incident }: Props) {
 
     return () => controller.abort();
   }, [incident.id]);
-
-  if (incident.id !== "INC-2406") return null;
 
   const chains = analysis ? causalChains(analysis) : [];
   const primaryAssets = analysis ? uniqueValues(analysis.cascade.primaryImpacts.map((impact) => impact.assetName)) : [];
