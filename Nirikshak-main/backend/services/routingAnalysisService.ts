@@ -1,6 +1,6 @@
 import { analyzeRoutes } from "../engines/routingEngine.ts";
 import type { CascadeAnalysisResult } from "../types/cascade.ts";
-import type { RouteAnalysisResult, RoutingDataSource } from "../types/routing.ts";
+import type { RouteAnalysisInput, RouteAnalysisResult, RoutingDataSource } from "../types/routing.ts";
 import { fetchOsrmRoutes } from "../utils/osrmRoutingClient.ts";
 
 export async function analyzeIncidentRoute(
@@ -22,7 +22,7 @@ export async function analyzeIncidentRoute(
 
   const impacts = await dataSource.findIncidentImpacts(incident.id);
   const routes = await fetchOsrmRoutes(resource.location, incident.location, signal);
-  const analysis = analyzeRoutes({ incident, resource, cascade, assets, impacts, routes });
+  const analysis = analyzeRouteInput({ incident, resource, cascade, assets, impacts, routes });
   return {
     incidentId: incident.externalId,
     resourceId: resource.externalId,
@@ -30,4 +30,8 @@ export async function analyzeIncidentRoute(
     destination: incident.location,
     ...analysis,
   };
+}
+
+export function analyzeRouteInput(input: RouteAnalysisInput): Omit<RouteAnalysisResult, "incidentId" | "resourceId" | "origin" | "destination"> {
+  return analyzeRoutes(input);
 }

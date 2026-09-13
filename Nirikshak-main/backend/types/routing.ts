@@ -87,6 +87,15 @@ export type RouteAnalysisResult = {
   explanation: string;
 };
 
+export type RouteAnalysisInput = {
+  incident: RoutingIncident;
+  resource: RoutingResource;
+  cascade: CascadeAnalysisResult;
+  assets: RoutingAsset[];
+  impacts: RoutingImpact[];
+  routes: OsrmRoute[];
+};
+
 export type RoutingDataSource = {
   findIncident(idOrExternalId: string): Promise<RoutingIncident | null>;
   findResource(idOrExternalId: string): Promise<RoutingResource | null>;

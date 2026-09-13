@@ -23,6 +23,7 @@ export type CascadeIncidentImpact = {
   likelihood: number | null;
   description: string | null;
   asset: CascadeAsset | null;
+  scenarioOnly?: boolean;
 };
 
 export type CascadeDependency = {
