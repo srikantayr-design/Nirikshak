@@ -11,7 +11,7 @@ export const defaultPreferences: Preferences = {
   soundAlerts: true,
   compactDataDensity: false,
   mapAutoRefresh: true,
-  defaultMapLayer: "operational",
+  defaultMapLayer: "satellite",
 };
 
 const storageKey = "nirikshak.preferences";
