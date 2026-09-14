@@ -5,6 +5,7 @@ import type {
   RoutingImpact,
   RoutingIncident,
   RoutingResource,
+  RouteAssignment,
 } from "../types/routing.ts";
 
 type SupabaseQuery = PromiseLike<{ data: unknown; error: unknown }> & {
@@ -21,6 +22,17 @@ type IncidentRow = { id: string; external_id: string; severity: string; location
 type ResourceRow = { id: string; external_id: string; name: string; status: string; location: LocationRow };
 type AssetRow = { id: string; external_id: string; name: string; asset_type: string; status: string; criticality: string; location: LocationRow };
 type ImpactRow = { asset_id: string; impact_state: "current" | "predicted"; impact_type: string; severity: string | null; infrastructure_assets: AssetRow | null };
+type RouteAssignmentRow = {
+  id: string;
+  external_id: string | null;
+  incident_id: string;
+  department_id: string | null;
+  department: { code: string; name: string } | null;
+  resource_id: string | null;
+  origin_asset_id: string | null;
+  destination_asset_id: string | null;
+  route_purpose: string | null;
+};
 
 function parseLocation(value: LocationRow): RoutePoint | null {
   let parsed: unknown = value;
@@ -115,6 +127,28 @@ export function createSupabaseRoutingRepository(client: SupabaseClient): Routing
         severity: row.severity,
         asset: row.infrastructure_assets ? asset(row.infrastructure_assets) : null,
       }));
+    },
+
+    async listRouteAssignments(incidentId: string): Promise<RouteAssignment[]> {
+      const { data, error } = await client.from("routes")
+        .select("id, external_id, incident_id, department_id, route_purpose, resource_id, origin_asset_id, destination_asset_id, departments (code, name)")
+        .eq("incident_id", incidentId)
+        .order("route_rank");
+      if (error) throw error;
+      return (data as unknown as RouteAssignmentRow[] ?? [])
+        .filter((row): row is RouteAssignmentRow & { external_id: string } => Boolean(row.external_id))
+        .map((row) => ({
+          id: row.id,
+          externalId: row.external_id,
+          incidentId: row.incident_id,
+          departmentId: row.department_id,
+          departmentCode: row.department?.code ?? null,
+          departmentName: row.department?.name ?? null,
+          resourceId: row.resource_id,
+          originAssetId: row.origin_asset_id,
+          destinationAssetId: row.destination_asset_id,
+          routePurpose: row.route_purpose,
+        }));
     },
   };
 }

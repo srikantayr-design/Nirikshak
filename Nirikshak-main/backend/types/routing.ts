@@ -45,6 +45,19 @@ export type RoutingImpact = {
   asset: RoutingAsset | null;
 };
 
+export type RouteAssignment = {
+  id: string;
+  externalId: string;
+  incidentId: string;
+  departmentId: string | null;
+  departmentCode: string | null;
+  departmentName: string | null;
+  resourceId: string | null;
+  originAssetId: string | null;
+  destinationAssetId: string | null;
+  routePurpose: string | null;
+};
+
 export type OsrmRoute = {
   distanceMeters: number;
   durationSeconds: number;
@@ -85,6 +98,26 @@ export type RouteAnalysisResult = {
   candidates: RouteCandidate[];
   recommendedRouteId: string | null;
   explanation: string;
+  departmentId?: string | null;
+  departmentCode?: string | null;
+  departmentName?: string | null;
+  routePurpose?: string | null;
+  originAssetId?: string | null;
+  destinationAssetId?: string | null;
+};
+
+export type RouteCalculationFailure = {
+  assignmentId: string;
+  incidentId: string;
+  departmentId: string | null;
+  departmentCode: string | null;
+  departmentName: string | null;
+  routePurpose: string | null;
+  resourceId: string | null;
+  resourceExternalId: string | null;
+  origin: RoutePoint | null;
+  destination: RoutePoint | null;
+  message: string;
 };
 
 export type RouteAnalysisInput = {
@@ -101,6 +134,7 @@ export type RoutingDataSource = {
   findResource(idOrExternalId: string): Promise<RoutingResource | null>;
   findAssets(): Promise<RoutingAsset[]>;
   findIncidentImpacts(incidentId: string): Promise<RoutingImpact[]>;
+  listRouteAssignments(incidentId: string): Promise<RouteAssignment[]>;
 };
 
 export type RouteEngineInput = {

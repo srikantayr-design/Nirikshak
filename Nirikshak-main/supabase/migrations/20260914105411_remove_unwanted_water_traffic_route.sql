@@ -1,0 +1,6 @@
+DELETE FROM public.routes
+WHERE external_id IN (
+  'ROUTE-2404-TRAFFIC',
+  'ROUTE-2403-TRAFFIC',
+  'ROUTE-2407-TRAFFIC'
+);

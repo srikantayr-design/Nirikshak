@@ -24,15 +24,38 @@ function isIsolationScenario(scenario: ScenarioRecord): boolean {
     || scenario.interventions.some((item) => JSON.stringify(item).toLowerCase().includes("isolate"));
 }
 
+function scenarioEffect(scenario: ScenarioRecord): string {
+  const configuredEffect = scenario.assumptions.simulation_effect;
+  if (typeof configuredEffect === "string") return configuredEffect;
+  if (isClosureScenario(scenario)) return "close";
+  if (isIsolationScenario(scenario)) return "isolate";
+  return "none";
+}
+
+function configuredAssetIds(scenario: ScenarioRecord, key: string): Set<string> {
+  const value = scenario.assumptions[key];
+  return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
+}
+
+function isMitigatedImpact(scenario: ScenarioRecord, impact: { asset?: { externalId: string } | null }): boolean {
+  return configuredAssetIds(scenario, "mitigated_asset_external_ids").has(impact.asset?.externalId ?? "");
+}
+
+function applyScenarioToImpacts<T extends { asset?: { externalId: string } | null }>(scenario: ScenarioRecord, impacts: T[]): T[] {
+  return scenarioEffect(scenario) === "mitigate"
+    ? impacts.filter((impact) => !isMitigatedImpact(scenario, impact))
+    : impacts;
+}
+
 function applyScenarioToRoutingImpacts(
   scenario: ScenarioRecord,
   assets: Awaited<ReturnType<RoutingDataSource["findAssets"]>>,
   impacts: RoutingImpact[],
 ): { assets: typeof assets; impacts: RoutingImpact[] } {
-  if (!scenario.focusAssetId) return { assets, impacts };
-  const closure = isClosureScenario(scenario);
-  const isolation = isIsolationScenario(scenario);
-  if (!closure && !isolation) return { assets, impacts };
+  if (!scenario.focusAssetId) return { assets, impacts: applyScenarioToImpacts(scenario, impacts) };
+  const closure = scenarioEffect(scenario) === "close";
+  const isolation = scenarioEffect(scenario) === "isolate";
+  if (!closure && !isolation) return { assets, impacts: applyScenarioToImpacts(scenario, impacts) };
 
   const status = closure ? "blocked" : "offline";
   const impactType = closure ? "scenario_road_closure" : "scenario_isolation";
@@ -55,8 +78,8 @@ function applyScenarioToRoutingImpacts(
 }
 
 function scenarioImpactType(scenario: ScenarioRecord): string | null {
-  if (isClosureScenario(scenario)) return "scenario_road_closure";
-  if (isIsolationScenario(scenario)) return "scenario_isolation";
+  if (scenarioEffect(scenario) === "close") return "scenario_road_closure";
+  if (scenarioEffect(scenario) === "isolate") return "scenario_isolation";
   return null;
 }
 
@@ -66,7 +89,8 @@ function applyScenarioToCascadeImpacts(
   assets: Awaited<ReturnType<RoutingDataSource["findAssets"]>>,
 ): { impacts: CascadeIncidentImpact[]; scenarioOnlyImpacts: ScenarioOnlyImpact[] } {
   const impactType = scenarioImpactType(scenario);
-  if (!scenario.focusAssetId || !impactType) return { impacts, scenarioOnlyImpacts: [] };
+  if (!impactType) return { impacts: applyScenarioToImpacts(scenario, impacts), scenarioOnlyImpacts: [] };
+  if (!scenario.focusAssetId) return { impacts, scenarioOnlyImpacts: [] };
   const focusImpact = impacts.find((impact) => impact.assetId === scenario.focusAssetId && impact.impactState === "current");
   const focusAsset = focusImpact?.asset ?? assets.find((asset) => asset.id === scenario.focusAssetId);
   if (!focusAsset) return { impacts, scenarioOnlyImpacts: [] };
@@ -74,7 +98,7 @@ function applyScenarioToCascadeImpacts(
     assetId: focusAsset.id,
     assetName: focusAsset.name,
     impactType,
-    reason: `${focusAsset.name} is temporarily treated as ${isClosureScenario(scenario) ? "closed" : "isolated"} for this scenario only; real database impacts remain unchanged.`,
+    reason: `${focusAsset.name} would be ${scenarioEffect(scenario) === "close" ? "closed" : "isolated"} if this action were approved.`,
   };
   if (focusImpact) {
     return {
@@ -136,11 +160,13 @@ export async function simulateScenario(
   scenarioId: string,
   dependencies: SimulationDependencies,
   signal?: AbortSignal,
+  runtimeSeverity?: string,
 ): Promise<ScenarioComparison> {
   const scenario = await dependencies.scenarios.findScenario(scenarioId);
   if (!scenario) throw new Error(`Scenario not found: ${scenarioId}`);
   const cascadeIncident = await dependencies.cascade.findIncident(incidentId);
   if (!cascadeIncident) throw new Error(`Incident not found: ${incidentId}`);
+  if (runtimeSeverity) cascadeIncident.severity = runtimeSeverity;
   if (scenario.incidentId && scenario.incidentId !== cascadeIncident.id) {
     throw new Error(`Scenario ${scenario.externalId} is not linked to incident ${incidentId}`);
   }
@@ -152,6 +178,7 @@ export async function simulateScenario(
   const baselineResponse = await (async () => {
     const incident = await dependencies.response.findIncident(incidentId);
     if (!incident) throw new Error(`Incident not found: ${incidentId}`);
+    if (runtimeSeverity) incident.severity = runtimeSeverity;
     const [assets, departments, resources] = await Promise.all([
       dependencies.response.listAssets(),
       dependencies.response.listDepartments(),
@@ -180,6 +207,7 @@ export async function simulateScenario(
   const simulatedCascade = await analyzeCascade(cascadeIncident, scenarioCascade.impacts, dependencies.cascade.findDependenciesFromAsset.bind(dependencies.cascade));
   const scenarioResponseIncident = await dependencies.response.findIncident(incidentId);
   if (!scenarioResponseIncident) throw new Error(`Incident not found: ${incidentId}`);
+  if (runtimeSeverity) scenarioResponseIncident.severity = runtimeSeverity;
   const [responseAssets, responseDepartments, responseResources] = await Promise.all([
     dependencies.response.listAssets(),
     dependencies.response.listDepartments(),
@@ -203,11 +231,12 @@ export async function simulateScenario(
     .filter((department) => !baselineResponse.departments.some((before) => before.departmentId === department.departmentId))
     .map((department) => department.departmentName);
   const riskChange = simulatedCascade.cascadeRiskScore - baselineCascade.cascadeRiskScore;
+  const expectedOutcome = typeof scenario.assumptions.expected_outcome === "string" ? scenario.assumptions.expected_outcome : null;
   const scenarioImpactExplanation = scenarioCascade.scenarioOnlyImpacts.map((impact) => impact.reason).join(" ");
   const cascadeDeltaExplanation = riskChange === 0
     ? `${scenarioCascade.scenarioOnlyImpacts[0]?.assetName ?? "The focus asset"} was already represented in the baseline dependency reachability, so no newly affected assets were added.`
     : `Cascade risk changed by ${riskChange}.`;
-  const explanation = `${scenario.name} was simulated in memory only. ${scenarioImpactExplanation} Cascade risk changed from ${baselineCascade.cascadeRiskScore} (${baselineCascade.cascadeRiskLevel}) to ${simulatedCascade.cascadeRiskScore} (${simulatedCascade.cascadeRiskLevel}); response priority changed from ${baselineResponse.priority} to ${simulatedResponse.priority}. ${cascadeDeltaExplanation} ${etaChangeSeconds === null ? "No route ETA comparison was available." : `The selected-route ETA changed by ${etaChangeSeconds} seconds.`} ${unavailableRoutes(baselineSnapshot, simulatedSnapshot).length ? `Routes newly unavailable: ${unavailableRoutes(baselineSnapshot, simulatedSnapshot).join(", ")}.` : "No previously available route became newly blocked."} No database rows were written.`;
+  const explanation = `${scenario.name} is a hypothetical action. ${scenarioImpactExplanation} ${expectedOutcome ?? "The selected administrative action was applied to the existing incident relationships."} Overall impact risk would change from ${baselineCascade.cascadeRiskScore} (${baselineCascade.cascadeRiskLevel}) to ${simulatedCascade.cascadeRiskScore} (${simulatedCascade.cascadeRiskLevel}); response priority would change from ${baselineResponse.priority} to ${simulatedResponse.priority}. ${cascadeDeltaExplanation} ${etaChangeSeconds === null ? "No route time comparison was available." : `The recommended route time would change by ${etaChangeSeconds} seconds.`} ${unavailableRoutes(baselineSnapshot, simulatedSnapshot).length ? `Routes no longer available: ${unavailableRoutes(baselineSnapshot, simulatedSnapshot).join(", ")}.` : "No currently available route would become blocked."} No database rows were written.`;
 
   return {
     scenarioId: scenario.externalId,

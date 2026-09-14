@@ -1,0 +1,9 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "command": true,
+        "true": true,
+        "npx supabase": true,
+        "npx tsc": true,
+        "frontend/node_modules/.bin/tsc": true
+    }
+}

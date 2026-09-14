@@ -271,7 +271,7 @@ select * from (values
     '[{"action": "close_northbound_lane", "owner": "TRAFFIC"}, {"action": "divert_emergency_traffic", "owner": "POLICE"}, {"action": "protect_hospital_approach", "owner": "MEDICAL"}]'::jsonb,
     '[{"asset": "H1", "impact": "ambulance_response_delay", "risk_score": 58, "probability": 72}, {"asset": "E01", "impact": "coordination_access_impact", "risk_score": 44, "probability": 55}]'::jsonb,
     '{"traffic_delay_minutes": 9, "emergency_corridor_preserved": true, "recommended": true, "result_summary": "Full closure is operationally acceptable when the diversion and emergency corridor are staffed."}'::jsonb,
-    81,
+    81.00::numeric(5, 2),
     '2026-09-12 14:12:00+05:30'::timestamptz
   ),
   (
@@ -286,7 +286,7 @@ select * from (values
     '[{"action": "isolate_transformer", "owner": "ELECTRICITY"}, {"action": "start_pump_backup", "owner": "WATER"}, {"action": "verify_hospital_generator", "owner": "MEDICAL"}]'::jsonb,
     '[{"asset": "W2", "impact": "pressure_zone_reduction", "risk_score": 61, "probability": 64}, {"asset": "H1", "impact": "backup_power_strain", "risk_score": 49, "probability": 51}]'::jsonb,
     '{"transformer_damage_avoided": true, "water_service_continuity": "maintained_with_backup", "hospital_continuity": "maintained", "recommended": true, "result_summary": "Isolation is preferred if W2 backup power and H1 generator checks complete first."}'::jsonb,
-    84,
+    84.00::numeric(5, 2),
     '2026-09-12 14:20:00+05:30'::timestamptz
   )
 ) as demo_scenarios(external_id, name, scenario_type, status, incident_id, focus_asset_id, description, assumptions, interventions, predicted_impacts, intervention_results, confidence, evaluated_at)
