@@ -5,6 +5,7 @@ import { createSupabaseRoutingRepository } from "../../../backend/utils/supabase
 import { createSupabaseScenarioRepository } from "../../../backend/utils/supabaseScenarioRepository.ts";
 import type { ScenarioComparison, ScenarioRecord } from "../../../backend/types/scenario.ts";
 import { supabase } from "../lib/supabaseClient";
+import type { Severity } from "../data/incidents";
 
 export async function getIncidentScenarios(incidentExternalId: string): Promise<ScenarioRecord[]> {
   if (!supabase) throw new Error("Supabase environment variables are not configured.");
@@ -44,7 +45,7 @@ export async function getIncidentScenarios(incidentExternalId: string): Promise<
   }));
 }
 
-export async function runIncidentScenario(incidentId: string, scenarioId: string, signal?: AbortSignal): Promise<ScenarioComparison> {
+export async function runIncidentScenario(incidentId: string, scenarioId: string, runtimeSeverity?: Severity, signal?: AbortSignal): Promise<ScenarioComparison> {
   if (!supabase) throw new Error("Supabase environment variables are not configured.");
   const client = supabase as never;
   return simulateScenario(incidentId, scenarioId, {
@@ -52,5 +53,5 @@ export async function runIncidentScenario(incidentId: string, scenarioId: string
     cascade: createSupabaseCascadeRepository(client),
     response: createSupabaseResponseRepository(client),
     routing: createSupabaseRoutingRepository(client),
-  }, signal);
+  }, signal, runtimeSeverity?.toLowerCase());
 }

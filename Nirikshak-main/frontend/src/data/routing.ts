@@ -28,7 +28,7 @@ export const responseUnits: ResponseUnit[] = [
   { id: "R21", name: "Rescue Team R21", department: "Infrastructure / Disaster Response", baseAssetId: "ER1", status: "AVAILABLE" },
 ];
 
-export const incidentTargets: Record<string, string> = { "INC-2407": "B-A", "INC-2406": "T4", "INC-2405": "R12", "INC-2404": "W2" };
+export const incidentTargets: Record<string, string> = { "INC-2407": "B-A", "INC-2406": "T4", "INC-2405": "R12", "INC-2404": "M7", "INC-2403": "B-A", "INC-2401": "FP01" };
 
 export const obstacles: Obstacle[] = [
   { id: "obstacle-r12", name: "Road R12", type: "Road blockage", risk: "HIGH", lat: 12.9728, lng: 77.6384, effectMinutes: 3, mitigation: "Traffic diversion / road clearance", assetId: "R12" },
@@ -63,8 +63,21 @@ function distanceToSegment(point: [number, number], start: [number, number], end
   return Math.hypot(px - ratio * sx, py - ratio * sy);
 }
 
-export function obstaclesAlongRoute(geometry: RouteGeometry, routeObstacles = obstacles): Obstacle[] {
-  return routeObstacles.filter((obstacle) => geometry.coordinates.some((coordinate, index, coordinates) => index > 0 && distanceToSegment([obstacle.lat, obstacle.lng], [coordinates[index - 1][1], coordinates[index - 1][0]], [coordinate[1], coordinate[0]]) < 180));
+export function obstaclesAlongRoute(
+  geometry: RouteGeometry,
+  routeObstacles: Obstacle[] = []
+): Obstacle[] {
+  return routeObstacles.filter((obstacle) =>
+    geometry.coordinates.some(
+      (coordinate, index, coordinates) =>
+        index > 0 &&
+        distanceToSegment(
+          [obstacle.lat, obstacle.lng],
+          [coordinates[index - 1][1], coordinates[index - 1][0]],
+          [coordinate[1], coordinate[0]]
+        ) < 180
+    )
+  );
 }
 
 export function scoreRoute(route: OsrmRoute, routeObstacles: Obstacle[]): Omit<RouteCandidate, "id" | "name" | "routeRank" | "recommended"> {

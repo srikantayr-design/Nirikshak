@@ -12,7 +12,7 @@ type CommandCenterMapProps = {
 };
 
 const assetIcon = (asset: Asset) => {
-  const icon = asset.type === "HOSPITAL" ? "🏥" : asset.type === "FIRE STATION" ? "🚒" : asset.type === "ROAD" ? "🚧" : asset.type === "ELECTRICITY" ? "⚡" : asset.type === "WATER" ? "💧" : "🏢";
+  const icon = asset.type === "HOSPITAL" ? "🏥" : asset.type === "FIRE STATION" ? "🚒" : asset.type === "POLICE" ? "🚓" : asset.type === "ROAD" ? "🚧" : asset.type === "ELECTRICITY" ? "⚡" : asset.type === "WATER" || asset.type === "WATER MAIN" ? "💧" : asset.type === "FUEL STATION" ? "⛽" : asset.type === "EMERGENCY CENTRE" ? "✚" : "🏢";
   return L.divIcon({
     className: "command-asset-marker-wrapper",
     html: `<span class="command-asset-marker command-asset-${asset.type.toLowerCase().replaceAll(" ", "-")}">${icon}</span>`,
@@ -21,12 +21,23 @@ const assetIcon = (asset: Asset) => {
   });
 };
 
-const incidentIcon = L.divIcon({
+const incidentIcon = (incident: Incident) => {
+  const type = incident.type.toUpperCase();
+  const icon = type.includes("FUEL") || incident.title.toUpperCase().includes("PETROL") ? "⛽"
+    : type.includes("FIRE") ? "🔥"
+    : type.includes("POWER") || type.includes("ELECTRIC") ? "⚡"
+      : type.includes("TRANSPORT") || type.includes("ROAD") ? "🚧"
+        : type.includes("WATER") ? "💧"
+          : type.includes("COLLAPSE") || type.includes("STRUCTURAL") ? "🏚️"
+            : type.includes("ACCIDENT") || type.includes("GAS") || type.includes("HAZARD") ? "☣"
+              : "⚠";
+  return L.divIcon({
   className: "command-incident-marker-wrapper",
-  html: '<span class="command-incident-marker"><i>🔥</i></span>',
+    html: `<span class="command-incident-marker command-incident-${type.toLowerCase().replaceAll(" ", "-")}"><i>${icon}</i></span>`,
   iconSize: [48, 48],
   iconAnchor: [24, 24],
-});
+  });
+};
 
 const popupContent = (asset: Asset, incident: Incident, relatedAssetIds: string[]) => {
   const affectedReason = incident.affectedInfrastructure.includes(asset.name) ? `Affected by ${incident.title.toLowerCase()} impact analysis.` : relatedAssetIds.includes(asset.id) ? `Connected to infrastructure affected by ${incident.title.toLowerCase()}.` : "Emergency resource supporting the active response.";
@@ -41,7 +52,7 @@ export default function CommandCenterMap({ incident, assets, onAsset }: CommandC
   const primaryAffectedIds = assets.filter((asset) => incident.affectedInfrastructure.includes(asset.name)).map((asset) => asset.id);
   const affectedAssets = assets.filter((asset) => (incident.affectedInfrastructure.includes(asset.name) || asset.connectedAssets?.some((id) => primaryAffectedIds.includes(id))) && asset.lat != null && asset.lng != null);
   const primaryAffectedCount = primaryAffectedIds.length;
-  const incidentAsset = affectedAssets.find((asset) => asset.name === "Building A") ?? affectedAssets[0] ?? assets.find((asset) => asset.type === "BUILDING");
+  const incidentPoint = incident.locationCoordinates;
   const emergencyAssets = assets.filter((asset) => ["FIRE STATION", "HOSPITAL", "EMERGENCY CENTRE"].includes(asset.type) && asset.lat != null && asset.lng != null);
 
   useEffect(() => {
@@ -55,16 +66,16 @@ export default function CommandCenterMap({ incident, assets, onAsset }: CommandC
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !incidentAsset?.lat || !incidentAsset.lng) return;
+    if (!map || !incidentPoint) return;
     const layer = L.layerGroup().addTo(map);
-    const incidentPoint = [incidentAsset.lat, incidentAsset.lng] as [number, number];
+    const incidentCoordinates = [incidentPoint.lat, incidentPoint.lng] as [number, number];
     const impactedPoints = affectedAssets.map((asset) => [asset.lat!, asset.lng!] as [number, number]);
 
-    L.circle(incidentPoint, { radius: 900, color: "#dfb840", fillColor: "#dfb840", fillOpacity: 0.08, weight: 1, dashArray: "6 8" }).bindTooltip("MONITORING ZONE").addTo(layer);
-    L.circle(incidentPoint, { radius: 500, color: "#ed9b51", fillColor: "#ed9b51", fillOpacity: 0.1, weight: 1.5, dashArray: "5 6" }).bindTooltip("SECONDARY IMPACT ZONE").addTo(layer);
-    L.circle(incidentPoint, { radius: 250, color: "#f06455", fillColor: "#f06455", fillOpacity: 0.16, weight: 2 }).bindTooltip("PRIMARY IMPACT ZONE").addTo(layer);
+    L.circle(incidentCoordinates, { radius: 900, color: "#dfb840", fillColor: "#dfb840", fillOpacity: 0.08, weight: 1, dashArray: "6 8" }).bindTooltip("MONITORING ZONE").addTo(layer);
+    L.circle(incidentCoordinates, { radius: 500, color: "#ed9b51", fillColor: "#ed9b51", fillOpacity: 0.1, weight: 1.5, dashArray: "5 6" }).bindTooltip("SECONDARY IMPACT ZONE").addTo(layer);
+    L.circle(incidentCoordinates, { radius: 250, color: "#f06455", fillColor: "#f06455", fillOpacity: 0.16, weight: 2 }).bindTooltip("PRIMARY IMPACT ZONE").addTo(layer);
 
-    const incidentMarker = L.marker(incidentPoint, { icon: incidentIcon, zIndexOffset: 1000 }).bindPopup(`<strong>${incident.title}</strong><br />Severity: ${incident.severity}<br />Status: ${incident.status}`);
+    const incidentMarker = L.marker(incidentCoordinates, { icon: incidentIcon(incident), zIndexOffset: 1000 }).bindPopup(`<strong>${incident.title}</strong><br />Severity: ${incident.severity}<br />Status: ${incident.status}`);
     incidentMarker.addTo(layer);
 
     affectedAssets.forEach((asset) => {
@@ -86,7 +97,7 @@ export default function CommandCenterMap({ incident, assets, onAsset }: CommandC
     focusIncident();
     const refresh = loadPreferences().mapAutoRefresh ? window.setInterval(() => map.invalidateSize(), 30000) : undefined;
     return () => { if (refresh) window.clearInterval(refresh); layer.clearLayers(); map.removeLayer(layer); };
-  }, [affectedAssets, emergencyAssets, incident, incidentAsset, onAsset]);
+  }, [affectedAssets, emergencyAssets, incident, incidentPoint, onAsset]);
 
   return <div className="command-map-shell">
     <div ref={mapElement} className="leaflet-command-map" aria-label="Command Center operational map" />

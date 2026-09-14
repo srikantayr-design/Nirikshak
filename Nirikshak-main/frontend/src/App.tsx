@@ -38,6 +38,7 @@ import {
   infrastructureAssetToFrontendAsset,
 } from "./services/infrastructureService";
 import { getIncidentImpactDetails, type IncidentImpactDetail } from "./services/impactService";
+import { highestPriorityIncident, prioritizeIncidents } from "./services/incidentPriority";
 import "./App.css";
 import "./IncidentEnhancements.css";
 
@@ -129,6 +130,20 @@ function persistCoordinationRequests(
 
 const commandAssets = infrastructureAssets;
 
+const runtimeSeverityLevels: Severity[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+
+function randomizeSessionIncidents(loadedIncidents: Incident[]): Incident[] {
+  const shuffled = [...loadedIncidents];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled.slice(0, 4).map((incident) => ({
+    ...incident,
+    severity: runtimeSeverityLevels[Math.floor(Math.random() * runtimeSeverityLevels.length)],
+  }));
+}
+
 function enrichIncidentAssets(incident: Incident, assets: Asset[]): Incident {
   const assetById = new Map(assets.map((asset) => [asset.id, asset]));
   return {
@@ -202,8 +217,9 @@ function App() {
     void getIncidents()
       .then((loadedIncidents) => {
         if (!active) return;
-        setDatabaseIncidents(loadedIncidents);
-        if (loadedIncidents[0]) setSelectedIncident(loadedIncidents[0]);
+        const sessionIncidents = randomizeSessionIncidents(loadedIncidents);
+        setDatabaseIncidents(sessionIncidents);
+        if (sessionIncidents[0]) setSelectedIncident(sessionIncidents[0]);
       })
       .catch(() => {
         if (active) setIncidentError(true);
@@ -558,8 +574,9 @@ function App() {
           )}
 
           {view === "routing" && (
-            <EmergencyRouting
+                <EmergencyRouting
               incident={selectedIncident}
+                  assets={databaseAssets}
               onBack={() =>
                 navigate("incidents")
               }
@@ -584,9 +601,7 @@ function App() {
           {view === "departments" &&
             (selectedDepartment ? (
               <DepartmentDashboard
-                departmentId={
-                  selectedDepartment
-                }
+                departmentId={selectedDepartment}
                 onBack={() =>
                   setSelectedDepartment(null)
                 }
@@ -953,12 +968,8 @@ function CommandCenter({
   infrastructureLoading: boolean;
   infrastructureError: boolean;
 }) {
-  const activeIncident =
-    databaseIncidents.find(
-      (incident) =>
-        incident.severity === "CRITICAL" &&
-        incident.status === "ACTIVE"
-    ) ?? databaseIncidents[0];
+  const activeIncident = highestPriorityIncident(databaseIncidents);
+  const prioritizedIncidents = prioritizeIncidents(databaseIncidents);
 
   const affectedAssetCount = activeIncident
     ? new Set(activeIncident.affectedInfrastructure).size
@@ -1040,7 +1051,7 @@ function CommandCenter({
             }
           >
             <div className="incident-list">
-              {databaseIncidents
+              {prioritizedIncidents
                 .slice(0, 3)
                 .map((incident) => (
                   <button
@@ -1085,20 +1096,10 @@ function CommandCenter({
             eyebrow="DECISION SUPPORT"
           >
             <div className="action-list">
-              <Action
-                text="Establish 200m exclusion zone around Building A"
-                meta="Fire command · immediate"
-              />
-
-              <Action
-                text="Reroute northbound traffic from Road R12"
-                meta="Traffic control · in progress"
-              />
-
-              <Action
-                text="Isolate Transformer T4 before thermal escalation"
-                meta="Electricity · recommended"
-              />
+              {activeIncident?.recommendedActions.map((action) => (
+                <Action key={`${activeIncident.id}-${action.text}`} text={action.text} meta={action.meta} />
+              ))}
+              {!activeIncident && <p className="muted-copy">No recommended actions available.</p>}
             </div>
           </Panel>
         </div>
@@ -1227,7 +1228,7 @@ function Incidents({
 
     try {
       const selected = await getIncidentByExternalId(incident.id);
-      onIncident(selected);
+      onIncident({ ...selected, severity: incident.severity });
     } catch {
       setProfileError(true);
     } finally {
@@ -1718,7 +1719,7 @@ function Infrastructure({
         {!loading && !error && !assets.length && <p className="muted-copy">No infrastructure data available.</p>}
         {!loading && !error && assets.length > 0 && <DigitalTwinMap
           assets={assets}
-          locations={monitoredLocations}
+          locations={[]}
           layers={layers}
           selectedAsset={selectedAsset}
           selectedLocation={selectedLocation}

@@ -46,7 +46,7 @@ export default function BackendAnalysisPanel({ incident }: Props) {
     setError(null);
     setAnalysis(null);
 
-    void loadBackendIncidentAnalysis(incident.id, controller.signal)
+    void loadBackendIncidentAnalysis(incident.id, incident.severity, controller.signal)
       .then(setAnalysis)
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Backend analysis unavailable.");
@@ -60,7 +60,8 @@ export default function BackendAnalysisPanel({ incident }: Props) {
 
   const chains = analysis ? causalChains(analysis) : [];
   const primaryAssets = analysis ? uniqueValues(analysis.cascade.primaryImpacts.map((impact) => impact.assetName)) : [];
-  const route = analysis?.route?.candidates.find((candidate) => candidate.recommended);
+  const routes = analysis?.routes ?? [];
+  const routeCount = routes.length;
   const resource = analysis?.response.resourceRecommendations[0];
   const explanation = analysis
     ? conciseExplanation(analysis.cascade.explanation, [...analysis.cascade.primaryImpacts, ...analysis.cascade.propagatedImpacts].map((impact) => impact.assetName))
@@ -76,7 +77,7 @@ export default function BackendAnalysisPanel({ incident }: Props) {
         <span><b>RISK</b> · {analysis.cascade.cascadeRiskScore} / 100 · {analysis.cascade.cascadeRiskLevel}</span>
         <span><b>RESPONSE</b> · {analysis.response.departments.map((department) => `${department.departmentName} — ${department.priority}`).join(" · ")}</span>
         <span><b>RESOURCE</b> · {resource ? `${resource.resourceName} · Available` : "No available resource recommendation"}</span>
-        {route ? <span><b>ROUTE</b> · {(route.distanceMeters / 1000).toFixed(1)} km · {Math.ceil(route.durationSeconds / 60)} min · {route.status} · risk {route.riskScore}</span> : <span><b>ROUTE</b> · No recommended route</span>}
+        <span><b>ROUTES</b> · {routeCount} department-specific road route{routeCount === 1 ? "" : "s"}{analysis?.routeFailures.length ? ` · ${analysis.routeFailures.length} unavailable` : ""}</span>
         <span><b>WHY</b> · {explanation}</span>
       </div>}
     </Panel>

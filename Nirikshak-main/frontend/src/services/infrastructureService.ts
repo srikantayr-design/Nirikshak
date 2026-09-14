@@ -61,6 +61,8 @@ function mapType(assetType: string): string {
     police_station: "POLICE",
     transformer: "ELECTRICITY",
     water_pump: "WATER",
+    water_main: "WATER MAIN",
+    fuel_station: "FUEL STATION",
     emergency_centre: "EMERGENCY CENTRE",
     monitored_location: "MONITORED LOCATION",
   };

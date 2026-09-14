@@ -62,6 +62,7 @@ export type Incident = {
   severity: Severity;
   status: string;
   location: string;
+  locationCoordinates?: { lat: number; lng: number };
   time: string;
   detectionTime: string;
   confidence: number;

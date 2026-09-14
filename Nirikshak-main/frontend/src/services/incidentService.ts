@@ -17,6 +17,7 @@ type ImpactRow = {
     description: string | null;
     criticality: string;
     current_risk: number;
+    location: unknown;
   } | null;
 };
 
@@ -40,6 +41,7 @@ type IncidentRow = {
   predicted_impacts: string | null;
   cascade_summary: string | null;
   responsible_departments: Json;
+  location: unknown;
   incident_impacts: ImpactRow[];
   response_actions: ActionRow[];
 };
@@ -60,6 +62,30 @@ function formatDetectedAt(value: string | null): string {
   }).format(new Date(value));
 }
 
+function parsePoint(value: unknown): { lat: number; lng: number } | undefined {
+  if (value && typeof value === "object" && "coordinates" in value) {
+    const coordinates = (value as { coordinates?: unknown }).coordinates;
+    if (Array.isArray(coordinates) && coordinates.length === 2 && coordinates.every((item) => typeof item === "number")) {
+      return { lat: coordinates[1], lng: coordinates[0] };
+    }
+  }
+  if (typeof value === "string") {
+    const point = value.match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i);
+    if (point) return { lat: Number(point[2]), lng: Number(point[1]) };
+    if (/^[0-9a-f]+$/i.test(value) && value.length >= 42) {
+      const bytes = value.match(/../g)?.map((pair) => Number.parseInt(pair, 16));
+      if (bytes) {
+        const view = new DataView(Uint8Array.from(bytes).buffer);
+        const littleEndian = view.getUint8(0) === 1;
+        const type = view.getUint32(1, littleEndian);
+        const offset = 5 + ((type & 0x20000000) !== 0 ? 4 : 0);
+        return { lat: view.getFloat64(offset + 8, littleEndian), lng: view.getFloat64(offset, littleEndian) };
+      }
+    }
+  }
+  return undefined;
+}
+
 function toAsset(impact: ImpactRow): Asset | null {
   const asset = impact.infrastructure_assets;
   if (!asset) return null;
@@ -73,6 +99,8 @@ function toAsset(impact: ImpactRow): Asset | null {
     y: 50,
     criticality: toSeverity(asset.criticality),
     currentRisk: asset.current_risk,
+    lat: parsePoint(asset.location)?.lat,
+    lng: parsePoint(asset.location)?.lng,
   };
 }
 
@@ -103,6 +131,7 @@ function mapIncident(row: IncidentRow): FrontendIncident {
     severity: toSeverity(row.severity),
     status: row.status.toUpperCase(),
     location: row.location_name ?? "Bengaluru Urban",
+    locationCoordinates: parsePoint(row.location),
     time: formatDetectedAt(row.detected_at),
     detectionTime: formatDetectedAt(row.detected_at),
     confidence: row.confidence ?? 0,
@@ -138,11 +167,11 @@ function mapIncident(row: IncidentRow): FrontendIncident {
 
 const incidentSelect = `
   id, external_id, title, incident_type, severity, status, location_name,
-  detected_at, confidence, current_impacts, predicted_impacts,
+  location, detected_at, confidence, current_impacts, predicted_impacts,
   cascade_summary, responsible_departments,
   incident_impacts (
     id, impact_state, impact_type, severity, likelihood, description,
-    infrastructure_assets (external_id, name, asset_type, status, description, criticality, current_risk)
+    infrastructure_assets (external_id, name, asset_type, status, description, criticality, current_risk, location)
   ),
   response_actions (action, status, priority)
 `;
